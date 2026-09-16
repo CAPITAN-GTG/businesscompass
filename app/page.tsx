@@ -23,6 +23,7 @@ import { isInCalifornia, intersectMapBBoxWithCalifornia, type MapBBox, type User
 import { businessesToPins } from "@/lib/pins";
 import {
   businessesInBBoxFromCache,
+  businessesInBBoxFromAllRanks,
   clearSessionCache,
   isAreaLoaded,
   markAreaLoaded,
@@ -49,6 +50,7 @@ const ROW_H = 52;
 const LIST_PAGE_SIZE = 25;
 
 type MapMode = "explore" | "locked";
+type ColorFilter = AgeColorBand | "all";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -150,7 +152,7 @@ export default function Home() {
   >("idle");
   const [focusUserToken, setFocusUserToken] = useState(0);
   const [listPage, setListPage] = useState(1);
-  const [colorFilter, setColorFilter] = useState<AgeColorBand>(
+  const [colorFilter, setColorFilter] = useState<ColorFilter>(
     DEFAULT_AGE_COLOR_BAND,
   );
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -159,6 +161,8 @@ export default function Home() {
   const [liveZoom, setLiveZoom] = useState(MAP_DEFAULT_ZOOM);
   /** Committed search box — pins/list stay for this area until Keep looking. */
   const [lockedBBox, setLockedBBox] = useState<MapBBox | null>(null);
+  /** Total rows fetched across all ranks for the current Find. */
+  const [fetchedTotal, setFetchedTotal] = useState(0);
   const [placeQuery, setPlaceQuery] = useState("");
   const [placeStatus, setPlaceStatus] = useState<
     "idle" | "searching" | "ok" | "approx" | "missing" | "outside"
@@ -192,7 +196,14 @@ export default function Home() {
         : null;
 
   const activeFilterMeta =
-    AGE_COLOR_FILTERS.find((f) => f.id === colorFilter) ?? null;
+    colorFilter === "all"
+      ? null
+      : (AGE_COLOR_FILTERS.find((f) => f.id === colorFilter) ?? null);
+
+  const canShowAll =
+    mode === "locked" &&
+    fetchedTotal > 0 &&
+    fetchedTotal < VIEW_FETCH_MAX_PER_RANK;
 
   const onFetchError = useEffectEvent((message: string) => {
     fetchGenRef.current += 1;
@@ -200,13 +211,19 @@ export default function Home() {
     setLoading(false);
     setRankLoad(null);
     setDenseMatchCount(null);
+    setFetchedTotal(0);
     setError(message);
     // Unlock so the user can zoom in / reframe and try again.
     setMode("explore");
     setLockedBBox(null);
   });
 
-  const paintLocked = useEffectEvent((filter: AgeColorBand, bbox: MapBBox) => {
+  const paintLocked = useEffectEvent((filter: ColorFilter, bbox: MapBBox) => {
+    if (filter === "all") {
+      setDenseMatchCount(null);
+      setBusinesses(businessesInBBoxFromAllRanks(bbox));
+      return;
+    }
     const key = viewFilterKey(filter);
     const dense = areaTooDenseCount(key, bbox);
     if (dense != null) {
@@ -325,13 +342,14 @@ export default function Home() {
 
   /** Find: load each rank one-by-one under a full-screen blocker, then show active. */
   const fetchAllRanksForArea = useCallback(
-    async (active: AgeColorBand, bbox: MapBBox) => {
+    async (active: ColorFilter, bbox: MapBBox) => {
       const gen = ++fetchGenRef.current;
       const total = AGE_COLOR_FILTERS.length;
       setError(null);
       setLoading(true);
       setBusinesses([]);
       setDenseMatchCount(null);
+      setFetchedTotal(0);
       setRankLoad({ index: 0, total });
 
       let totalLoaded = 0;
@@ -353,7 +371,15 @@ export default function Home() {
 
         if (gen !== fetchGenRef.current) return;
         setRankLoad(null);
-        paintLocked(active, bbox);
+        setFetchedTotal(totalLoaded);
+
+        const underAllCap = totalLoaded < VIEW_FETCH_MAX_PER_RANK;
+        let paint: ColorFilter = active;
+        if (active === "all" && !underAllCap) {
+          paint = DEFAULT_AGE_COLOR_BAND;
+          setColorFilter(paint);
+        }
+        paintLocked(paint, bbox);
         setLoading(false);
         setError(null);
       } catch (err) {
@@ -450,6 +476,7 @@ export default function Home() {
     clearSessionCache();
     setMode("explore");
     setLockedBBox(null);
+    setFetchedTotal(0);
     setBusinesses([]);
     setLoading(false);
     setRankLoad(null);
@@ -477,6 +504,7 @@ export default function Home() {
         clearSessionCache();
         setMode("explore");
         setLockedBBox(null);
+        setFetchedTotal(0);
         setBusinesses([]);
         setLoading(false);
         setRankLoad(null);
@@ -506,7 +534,7 @@ export default function Home() {
         return;
       }
 
-      setPlaceFocus({ lat: hit.lat, lng: hit.lng, zoom: MAP_DEFAULT_ZOOM });
+      setPlaceFocus({ lat: hit.lat, lng: hit.lng, zoom: hit.zoom });
       setPlaceFocusToken((n) => n + 1);
       setPlaceStatus("ok");
       setPlaceMessage(hit.label);
@@ -516,7 +544,8 @@ export default function Home() {
     }
   }
 
-  function setFilter(next: AgeColorBand) {
+  function setFilter(next: ColorFilter) {
+    if (next === "all" && !canShowAll) return;
     setColorFilter(next);
   }
 
@@ -525,8 +554,21 @@ export default function Home() {
     if (modeRef.current !== "locked") return;
     const bbox = lockedBBoxRef.current;
     if (!bbox) return;
+    if (colorFilter === "all") {
+      paintLocked("all", bbox);
+      setLoading(false);
+      setRankLoad(null);
+      return;
+    }
     void ensureRankVisible(colorFilter, bbox);
   }, [colorFilter, ensureRankVisible]);
+
+  // If All is no longer allowed, drop back to the default rank.
+  useEffect(() => {
+    if (colorFilter === "all" && !canShowAll) {
+      setColorFilter(DEFAULT_AGE_COLOR_BAND);
+    }
+  }, [colorFilter, canShowAll]);
 
   // Reset list chrome when rank changes while locked.
   useEffect(() => {
@@ -677,9 +719,11 @@ export default function Home() {
   const filterHint =
     mode === "explore"
       ? "Pick a time band, search a place, then find businesses in view."
-      : activeFilterMeta
-        ? `${activeFilterMeta.hint} · this Find area`
-        : `Time in business vs today (${todayYmd()}).`;
+      : colorFilter === "all"
+        ? `All ranks · ${fetchedTotal.toLocaleString()} loaded in this Find area`
+        : activeFilterMeta
+          ? `${activeFilterMeta.hint} · this Find area`
+          : `Time in business vs today (${todayYmd()}).`;
 
 
   return (
@@ -832,6 +876,20 @@ export default function Home() {
                 role="group"
                 aria-label="Time in business"
               >
+                {canShowAll ? (
+                  <button
+                    type="button"
+                    className={
+                      colorFilter === "all"
+                        ? "color-filter is-active"
+                        : "color-filter"
+                    }
+                    title="Show every loaded rank in this Find area"
+                    onClick={() => setFilter("all")}
+                  >
+                    All
+                  </button>
+                ) : null}
                 {AGE_COLOR_FILTERS.map((item) => (
                   <button
                     key={item.id}

@@ -120,6 +120,28 @@ export function businessesInBBoxFromCache(
   return out;
 }
 
+/** All ranks combined for the locked area (deduped by id). */
+export function businessesInBBoxFromAllRanks(bbox: MapBBox): Business[] {
+  const byId = new Map<string, Business>();
+  for (const key of stores.keys()) {
+    for (const b of businessesInBBoxFromCache(key, bbox)) {
+      byId.set(b.id, b);
+    }
+  }
+  const out = Array.from(byId.values());
+  out.sort((a, b) => {
+    const da = a.businessStartDate ?? "";
+    const db = b.businessStartDate ?? "";
+    return db.localeCompare(da);
+  });
+  return out;
+}
+
+/** Count of cached rows across all ranks in this box. */
+export function countBusinessesInBBoxAllRanks(bbox: MapBBox): number {
+  return businessesInBBoxFromAllRanks(bbox).length;
+}
+
 /** Wipe session data so the next search starts clean. */
 export function clearSessionCache(): void {
   stores.clear();

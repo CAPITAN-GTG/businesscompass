@@ -6,6 +6,7 @@ import {
   CA_WEST,
   isInCalifornia,
 } from "@/lib/geo";
+import { zoomForGeocodeResult } from "@/lib/geocode";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,9 @@ type NominatimRow = {
   lat: string;
   lon: string;
   display_name?: string;
+  class?: string;
+  type?: string;
+  boundingbox?: string[];
 };
 
 async function nominatimSearch(
@@ -66,11 +70,18 @@ export async function GET(request: NextRequest) {
       const lat = Number.parseFloat(r.lat);
       const lng = Number.parseFloat(r.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      const zoom = zoomForGeocodeResult({
+        class: r.class,
+        type: r.type,
+        boundingbox: r.boundingbox,
+      });
       return {
         lat,
         lng,
         label: r.display_name?.trim() || q,
         inCalifornia: isInCalifornia(lat, lng),
+        zoom,
+        kind: [r.class, r.type].filter(Boolean).join("/"),
       };
     })
     .filter((x): x is NonNullable<typeof x> => x != null);
