@@ -674,36 +674,415 @@ select {
 }
 
 @media (max-width: 800px) {
-  body {
-    overflow: auto;
-  }
-
-  .app {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(280px, 45dvh) 1fr;
-    height: auto;
-    min-height: 100dvh;
-  }
-
-  .map {
-    order: -1;
-    height: 100%;
-    min-height: 280px;
-  }
-
-  .panel {
-    border-right: 0;
-    border-top: 1px solid var(--line);
-    max-height: none;
-  }
-
   .detail-field {
     grid-template-columns: 1fr;
     gap: 0.15rem;
   }
-
-  .locate {
-    top: 0.5rem;
-    bottom: auto;
-  }
 }
+
+/* —— Phone UI (separate shell) —— */
+
+.app-boot {
+  height: 100dvh;
+  background: #e8e8e8;
+}
+
+.m-app {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  height: 100svh;
+  width: 100%;
+  overflow: hidden;
+  background: #0f1418;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.m-map {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.m-top {
+  position: absolute;
+  z-index: 1000;
+  top: calc(0.55rem + env(safe-area-inset-top, 0px));
+  left: 0.65rem;
+  right: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  pointer-events: none;
+}
+
+.m-top > * {
+  pointer-events: auto;
+}
+
+.m-search {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.35rem;
+  padding: 0.35rem;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.m-search input {
+  min-width: 0;
+  border: 0;
+  padding: 0.65rem 0.55rem;
+  font-size: 1rem;
+  background: transparent;
+  color: var(--ink);
+}
+
+.m-search input:focus {
+  outline: none;
+}
+
+.m-search button {
+  border: 1px solid var(--line);
+  background: #f4f4f4;
+  padding: 0.55rem 0.9rem;
+  min-width: 3.25rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.m-search button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.m-place-msg {
+  margin: 0;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid var(--line);
+}
+
+.m-place-msg.is-warn {
+  color: #7a3e00;
+  background: #fff6e8;
+  border-color: #f0d2a8;
+}
+
+.m-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.m-action {
+  flex: 1;
+  min-height: 2.75rem;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.97);
+  padding: 0.55rem 0.75rem;
+  font-weight: 700;
+  font-size: 0.92rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.m-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.m-action-primary {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+.m-action-warn {
+  background: #fff6e8;
+  color: #7a3e00;
+  border-color: #f0d2a8;
+}
+
+.m-locate {
+  position: absolute;
+  z-index: 1000;
+  right: 0.75rem;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  width: 3rem;
+  height: 3rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.97);
+  color: var(--locate);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  padding: 0;
+}
+
+.m-locate:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.m-sheet {
+  position: relative;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.16);
+  transition: height 0.22s ease;
+  overflow: hidden;
+}
+
+.m-sheet.is-peek {
+  height: 9.5rem;
+}
+
+.m-sheet.is-half {
+  height: min(48dvh, 22rem);
+}
+
+.m-sheet.is-full {
+  height: min(78dvh, 36rem);
+}
+
+.m-sheet-handle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  min-height: 1.75rem;
+  padding: 0.45rem 0 0.15rem;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.m-sheet-handle span {
+  width: 2.5rem;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: #c4c4c4;
+}
+
+.m-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  min-height: 0;
+  flex: 1;
+  padding: 0 0.85rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+}
+
+.m-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.m-brand {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 750;
+  line-height: 1.15;
+}
+
+.m-status {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.m-sheet-collapse {
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 0.45rem 0.7rem;
+  min-height: 2.4rem;
+  font-weight: 650;
+  font-size: 0.85rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.m-filters {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 0.15rem;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.m-filters::-webkit-scrollbar {
+  display: none;
+}
+
+.m-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 0.5rem 0.7rem;
+  min-height: 2.4rem;
+  font-size: 0.85rem;
+  font-weight: 550;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.m-chip i {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  display: inline-block;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.m-chip.is-active {
+  border-color: var(--accent);
+  background: #eef6f5;
+  color: var(--accent);
+}
+
+.m-peek-hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.m-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: #fff;
+  -webkit-overflow-scrolling: touch;
+}
+
+.m-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.65rem 0.7rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.m-row:active {
+  background: #eef6f5;
+}
+
+.m-row i {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.m-row span {
+  display: grid;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.m-row strong {
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.m-row em {
+  font-style: normal;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.m-pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.m-pager em {
+  font-style: normal;
+  opacity: 0.85;
+}
+
+.m-pager button {
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 0.55rem 0.85rem;
+  min-height: 2.5rem;
+  min-width: 4.25rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.m-pager button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.m-detail {
+  padding: 0 0.85rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
+}
+
+.m-detail .detail-back {
+  min-height: 2.5rem;
+  padding: 0.5rem 0.85rem;
+  font-weight: 650;
+}
+
+.m-detail .detail-title {
+  font-size: 1.15rem;
+}
+
+.m-detail .detail-copy {
+  min-height: 2rem;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.8rem;
+}
+
+.m-app .m-locate {
+  /* Sit above the sheet peek height */
+  bottom: calc(10.25rem + env(safe-area-inset-bottom, 0px));
+}
+
+.m-app:has(.m-sheet.is-half) .m-locate {
+  bottom: calc(min(48dvh, 22rem) + 0.65rem);
+}
+
+.m-app:has(.m-sheet.is-full) .m-locate {
+  display: none;
+}
+

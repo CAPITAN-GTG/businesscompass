@@ -124,9 +124,11 @@ function readMapBBox(map: L.Map): MapBBox | null {
 function createPinsLayer(
   map: L.Map,
   onSelect: (id: string | null) => void,
+  touchFriendly: boolean,
 ): PinsLayer {
   let pins: MapPin[] = [];
   let selectedId: string | null = null;
+  const hitBase = touchFriendly ? 28 : 18;
 
   const canvas = document.createElement("canvas");
   canvas.className = "business-pins-canvas";
@@ -218,7 +220,7 @@ function createPinsLayer(
     }
     const zoomScale = pinSizeForZoom(zoom);
     let best: MapPin | null = null;
-    let bestDist = 18 * zoomScale;
+    let bestDist = hitBase * zoomScale;
 
     for (let i = 0; i < pins.length; i++) {
       const p = pins[i];
@@ -272,6 +274,10 @@ interface BusinessMapProps {
   /** Fly the camera to a geocoded place (token bumps re-trigger). */
   placeFocus?: { lat: number; lng: number; zoom?: number } | null;
   placeFocusToken?: number;
+  /** Larger tap targets for phone use. */
+  touchFriendly?: boolean;
+  /** Hide the zoom debug overlay (cleaner mobile chrome). */
+  hideZoomDebug?: boolean;
 }
 
 export default function BusinessMap({
@@ -283,6 +289,8 @@ export default function BusinessMap({
   onViewChange,
   placeFocus = null,
   placeFocusToken = 0,
+  touchFriendly = false,
+  hideZoomDebug = false,
 }: BusinessMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -358,7 +366,11 @@ export default function BusinessMap({
     map.on("zoomend", syncStreetLabels);
     syncStreetLabels();
 
-    const pinsLayer = createPinsLayer(map, (id) => onSelectRef.current(id));
+    const pinsLayer = createPinsLayer(
+      map,
+      (id) => onSelectRef.current(id),
+      touchFriendly,
+    );
     const userLayer = L.layerGroup().addTo(map);
 
     mapRef.current = map;
@@ -437,6 +449,8 @@ export default function BusinessMap({
       pinsLayerRef.current = null;
       userLayerRef.current = null;
     };
+    // touchFriendly is fixed for the map instance lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -548,12 +562,15 @@ export default function BusinessMap({
         style={{ height: "100%", width: "100%" }}
         aria-label="Business map"
       />
-      <div className="zoom-debug" aria-hidden>
-        <span className="zoom-debug-value">{zoomLabel}</span>
-        <span className="zoom-debug-meta">
-          min {MAP_MIN_ZOOM_EXPLORE} · find ≥{MAP_FIND_MIN_ZOOM} · start {MAP_DEFAULT_ZOOM}
-        </span>
-      </div>
+      {hideZoomDebug ? null : (
+        <div className="zoom-debug" aria-hidden>
+          <span className="zoom-debug-value">{zoomLabel}</span>
+          <span className="zoom-debug-meta">
+            min {MAP_MIN_ZOOM_EXPLORE} · find ≥{MAP_FIND_MIN_ZOOM} · start{" "}
+            {MAP_DEFAULT_ZOOM}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
