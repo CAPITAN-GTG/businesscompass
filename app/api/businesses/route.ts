@@ -5,6 +5,7 @@ import {
   withLaErrorHandling,
 } from "@/lib/sources/losAngelesBusinesses";
 import { defaultSource } from "@/lib/sources";
+import { UNLOCATED_FETCH_LIMIT } from "@/lib/coordinates/config";
 import { isValidMapBBox } from "@/lib/geo";
 import type { BusinessQuery, BusinessSort } from "@/lib/types/business";
 
@@ -35,15 +36,17 @@ function parseBBox(sp: URLSearchParams): BusinessQuery["bbox"] | undefined {
 }
 
 export async function GET(request: NextRequest) {
+  // Map list stays lean. Phone enrichment runs only from the detail route.
   const sp = request.nextUrl.searchParams;
-  const bbox = parseBBox(sp);
+  const unlocated = sp.get("unlocated") === "1";
+  const bbox = unlocated ? undefined : parseBBox(sp);
 
   // Viewport queries stream page-by-page from the client.
   const page = Math.max(1, Number(sp.get("page") || "1") || 1);
-  const pageSize = Math.min(
-    5_000,
-    Math.max(1, Number(sp.get("pageSize") || "25") || 25),
-  );
+  const requestedSize = Math.max(1, Number(sp.get("pageSize") || "25") || 25);
+  const pageSize = unlocated
+    ? Math.min(UNLOCATED_FETCH_LIMIT, requestedSize)
+    : Math.min(5_000, requestedSize);
 
   const query: BusinessQuery = {
     page,
@@ -56,6 +59,7 @@ export async function GET(request: NextRequest) {
     naicsOrIndustry: sp.get("naicsOrIndustry") || undefined,
     startDateFrom: sp.get("startDateFrom") || undefined,
     startDateTo: sp.get("startDateTo") || undefined,
+    unlocated,
     bbox,
   };
 

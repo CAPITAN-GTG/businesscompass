@@ -94,6 +94,9 @@ export async function geocodeCaliforniaPlace(
   if (!q) return null;
 
   const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
+  if (res.status === 429 || res.status === 503) {
+    throw new Error("Place search is temporarily unavailable.");
+  }
   if (!res.ok) return null;
   const data = (await res.json()) as { hit?: GeocodeHit | null };
   const hit = data.hit ?? null;

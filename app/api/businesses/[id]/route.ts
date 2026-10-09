@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isLocationAccount } from "@/lib/locationAccount";
+import { loadBusinessDetail } from "@/lib/businessDetail";
 import {
   LosAngelesDataUnavailableError,
   withLaErrorHandling,
 } from "@/lib/sources/losAngelesBusinesses";
-import { defaultSource } from "@/lib/sources";
 
 export const dynamic = "force-dynamic";
 
@@ -12,20 +13,24 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const decoded = decodeURIComponent(id);
+  const decoded = decodeURIComponent(id).trim();
+
+  if (!isLocationAccount(decoded)) {
+    return NextResponse.json({ error: "Invalid business id." }, { status: 400 });
+  }
 
   try {
-    const business = await withLaErrorHandling(() =>
-      defaultSource.getById(decoded),
+    const { business, enrichment } = await withLaErrorHandling(() =>
+      loadBusinessDetail(decoded),
     );
 
-    if (!business) {
+    if (!business || !enrichment) {
       return NextResponse.json({ error: "Business not found." }, { status: 404 });
     }
 
     return NextResponse.json({
       business,
-      source: defaultSource.meta,
+      enrichment,
     });
   } catch (err) {
     const message =

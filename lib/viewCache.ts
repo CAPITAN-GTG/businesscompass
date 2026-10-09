@@ -2,6 +2,7 @@ import type { AgeColorBand } from "@/lib/ageColor";
 import { ageColorBandFromStartDate } from "@/lib/ageColor";
 import { mapBBoxKey, type MapBBox } from "@/lib/geo";
 import type { Business } from "@/lib/types/business";
+import { VIEW_FETCH_MAX_PER_RANK } from "@/lib/viewLimits";
 
 /**
  * Session-only cache (module scope). Cleared on “Keep looking” or full page reload.
@@ -121,6 +122,40 @@ export function businessesInBBoxFromCache(
 }
 
 /** All ranks combined for the locked area (deduped by id). */
+const MAX_LOADED_AREAS_PER_RANK = 4;
+
+/**
+ * Drop a rank's session cache before loading yet another area.
+ * A single Find can be up to VIEW_FETCH_MAX_PER_RANK rows; stacking those
+ * across many pans would grow the module Map without a ceiling.
+ * The area about to load is fetched again by the caller.
+ */
+export function releaseRankCacheIfFull(key: ViewFilterKey, bbox: MapBBox): void {
+  const store = stores.get(key);
+  if (!store) return;
+  if (store.loadedAreas.has(areaCacheKey(bbox))) return;
+  if (
+    store.loadedAreas.size >= MAX_LOADED_AREAS_PER_RANK ||
+    store.byId.size >= VIEW_FETCH_MAX_PER_RANK
+  ) {
+    store.byId.clear();
+    store.loadedAreas.clear();
+    store.tooDenseCounts.clear();
+  }
+}
+
+/** Replace a cached row in place. Returns false when the id is not loaded. */
+export function replaceCachedBusiness(next: Business): boolean {
+  if (!next.id) return false;
+  let found = false;
+  for (const store of stores.values()) {
+    if (!store.byId.has(next.id)) continue;
+    store.byId.set(next.id, next);
+    found = true;
+  }
+  return found;
+}
+
 export function businessesInBBoxFromAllRanks(bbox: MapBBox): Business[] {
   const byId = new Map<string, Business>();
   for (const key of stores.keys()) {
@@ -135,11 +170,6 @@ export function businessesInBBoxFromAllRanks(bbox: MapBBox): Business[] {
     return db.localeCompare(da);
   });
   return out;
-}
-
-/** Count of cached rows across all ranks in this box. */
-export function countBusinessesInBBoxAllRanks(bbox: MapBBox): number {
-  return businessesInBBoxFromAllRanks(bbox).length;
 }
 
 /** Wipe session data so the next search starts clean. */

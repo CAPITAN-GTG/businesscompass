@@ -25,6 +25,10 @@ export interface Business {
   businessEndDate: string | null;
   latitude: string | null;
   longitude: string | null;
+  /** Which coordinate is currently stored. Omitted until a placement decision is made. */
+  coordinateSource?: "la_county_cams" | "la_office_finance";
+  /** "high" only when a CAMS address point was accepted. "original" keeps the Finance coordinate. */
+  coordinateConfidence?: "high" | "original";
   source: string;
   sourceType: string;
 }
@@ -55,6 +59,8 @@ export interface BusinessQuery {
   naicsOrIndustry?: string;
   startDateFrom?: string; // YYYY-MM-DD
   startDateTo?: string; // YYYY-MM-DD
+  /** When set, recent registrations with no usable coordinate (0,0) instead of a map box. */
+  unlocated?: boolean;
   /** When set, SoQL within_box uses this viewport instead of all of California. */
   bbox?: BusinessBBox;
 }
@@ -73,4 +79,25 @@ export interface BusinessSourceMeta {
   description: string;
   officialUrl: string;
   dataPortalUrl: string;
+}
+
+/**
+ * Public contact data found for one LA business.
+ * phone / website are set only when confidence is "high".
+ * status distinguishes a real miss from a failed lookup.
+ */
+export type EnrichmentConfidence = "high" | "medium" | "low" | "none";
+
+export type EnrichmentStatus = "matched" | "no_match" | "unavailable";
+
+export interface BusinessEnrichment {
+  /** E.164, for tel: links. Null unless confidence is high. */
+  phone: string | null;
+  /** Display form of phone. Null unless confidence is high. */
+  phoneDisplay: string | null;
+  /** http(s) URL. Null unless confidence is high. */
+  website: string | null;
+  source: "openstreetmap" | null;
+  confidence: EnrichmentConfidence;
+  status: EnrichmentStatus;
 }

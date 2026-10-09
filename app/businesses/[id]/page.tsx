@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { defaultSource } from "@/lib/sources";
+import { loadBusinessDetail } from "@/lib/businessDetail";
 import {
-  LosAngelesDataUnavailableError,
   withLaErrorHandling,
 } from "@/lib/sources/losAngelesBusinesses";
-import type { Business } from "@/lib/types/business";
+import type { Business, BusinessEnrichment } from "@/lib/types/business";
 
 export const dynamic = "force-dynamic";
 
@@ -40,20 +40,17 @@ export default async function BusinessDetailPage({
   const decoded = decodeURIComponent(id);
 
   let business: Business | null = null;
+  let enrichment: BusinessEnrichment | null = null;
   let unavailable = false;
   let notFound = false;
 
   try {
-    business = await withLaErrorHandling(() =>
-      defaultSource.getById(decoded),
-    );
+    const detail = await withLaErrorHandling(() => loadBusinessDetail(decoded));
+    business = detail.business;
+    enrichment = detail.enrichment;
     if (!business) notFound = true;
-  } catch (err) {
-    if (err instanceof LosAngelesDataUnavailableError) {
-      unavailable = true;
-    } else {
-      unavailable = true;
-    }
+  } catch {
+    unavailable = true;
   }
 
   return (
@@ -115,6 +112,48 @@ export default async function BusinessDetailPage({
               <Field label="Account Number" value={business.id} />
               <Field label="Business Name" value={business.businessName} />
               <Field label="DBA" value={business.dbaName} />
+              <tr>
+                <th
+                  style={{
+                    textAlign: "left",
+                    padding: "0.35rem 0.5rem 0.35rem 0",
+                    verticalAlign: "top",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Phone
+                </th>
+                <td style={{ padding: "0.35rem 0" }}>
+                  {enrichment?.status === "matched" && enrichment.phone ? (
+                    <a href={`tel:${enrichment.phone}`}>
+                      {enrichment.phoneDisplay ?? enrichment.phone}
+                    </a>
+                  ) : enrichment?.status === "unavailable" ? (
+                    "Lookup unavailable"
+                  ) : (
+                    "No public phone number found"
+                  )}
+                </td>
+              </tr>
+              {enrichment?.status === "matched" && enrichment.website ? (
+                <tr>
+                  <th
+                    style={{
+                      textAlign: "left",
+                      padding: "0.35rem 0.5rem 0.35rem 0",
+                      verticalAlign: "top",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Website
+                  </th>
+                  <td style={{ padding: "0.35rem 0" }}>
+                    <a href={enrichment.website} target="_blank" rel="noopener noreferrer">
+                      {enrichment.website}
+                    </a>
+                  </td>
+                </tr>
+              ) : null}
               <Field
                 label="Business Start Date"
                 value={formatDate(business.businessStartDate)}

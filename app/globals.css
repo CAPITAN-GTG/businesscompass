@@ -28,6 +28,18 @@ body {
   overflow: hidden;
 }
 
+/* Phone shell is fixed so rotation and overscroll cannot reload the page. */
+html.is-phone,
+html.is-phone body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #0f1418;
+}
+
 a {
   color: var(--accent);
 }
@@ -380,6 +392,29 @@ select {
   background: #eee;
 }
 
+.detail-contact {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.detail-contact-status {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.detail-link {
+  font-weight: 650;
+  text-underline-offset: 2px;
+}
+
+.detail-source-note {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
 .detail-note {
   margin: 0;
   font-size: 0.72rem;
@@ -688,55 +723,90 @@ select {
 }
 
 .m-app {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  height: 100dvh;
-  height: 100svh;
+  position: fixed;
+  inset: 0;
   width: 100%;
+  height: 100%;
+  height: 100dvh;
   overflow: hidden;
+  overscroll-behavior: none;
   background: #0f1418;
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.m-app input,
+.m-app textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .m-map {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  width: 100%;
+  position: absolute;
+  inset: 0;
 }
 
 .m-top {
   position: absolute;
-  z-index: 1000;
-  top: calc(0.55rem + env(safe-area-inset-top, 0px));
-  left: 0.65rem;
-  right: 0.65rem;
+  z-index: 1200;
+  top: calc(0.2rem + env(safe-area-inset-top, 0px));
+  left: calc(0.4rem + env(safe-area-inset-left, 0px));
+  right: calc(0.4rem + env(safe-area-inset-right, 0px));
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.28rem;
+  transition: transform 0.22s ease;
+}
+
+.m-top.is-away {
+  transform: translateY(calc(-120% - env(safe-area-inset-top, 0px)));
   pointer-events: none;
 }
 
-.m-top > * {
-  pointer-events: auto;
+.m-top.is-dragging {
+  transition: none;
+}
+
+.m-top-grip {
+  display: flex;
+  justify-content: center;
+  padding: 0.08rem 0 0.02rem;
+  touch-action: none;
+  cursor: grab;
+}
+
+.m-top-grip span {
+  width: 1.7rem;
+  height: 0.16rem;
+  border-radius: 999px;
+  background: rgba(17, 17, 17, 0.28);
+}
+
+.m-top-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
 }
 
 .m-search {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 0.35rem;
-  padding: 0.35rem;
-  background: rgba(255, 255, 255, 0.97);
+  gap: 0.25rem;
+  padding: 0.18rem;
+  background: rgba(255, 255, 255, 0.96);
   border: 1px solid var(--line);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  border-radius: 0.45rem;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.16);
 }
 
 .m-search input {
   min-width: 0;
   border: 0;
-  padding: 0.65rem 0.55rem;
-  font-size: 1rem;
+  padding: 0.32rem 0.4rem;
+  /* 16px keeps iOS from zooming the page when the field is focused. */
+  font-size: 16px;
   background: transparent;
   color: var(--ink);
 }
@@ -748,10 +818,12 @@ select {
 .m-search button {
   border: 1px solid var(--line);
   background: #f4f4f4;
-  padding: 0.55rem 0.9rem;
-  min-width: 3.25rem;
+  padding: 0.28rem 0.55rem;
+  min-width: 2.2rem;
+  min-height: 1.7rem;
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 0.75rem;
+  border-radius: 0.3rem;
   cursor: pointer;
 }
 
@@ -762,12 +834,13 @@ select {
 
 .m-place-msg {
   margin: 0;
-  padding: 0.45rem 0.6rem;
-  font-size: 0.8rem;
-  line-height: 1.3;
+  padding: 0.28rem 0.45rem;
+  font-size: 0.68rem;
+  line-height: 1.25;
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.97);
+  background: rgba(255, 255, 255, 0.96);
   border: 1px solid var(--line);
+  border-radius: 0.35rem;
 }
 
 .m-place-msg.is-warn {
@@ -778,19 +851,20 @@ select {
 
 .m-actions {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.28rem;
 }
 
 .m-action {
   flex: 1;
-  min-height: 2.75rem;
+  min-height: 1.85rem;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.97);
-  padding: 0.55rem 0.75rem;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 0.28rem 0.45rem;
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: 0.75rem;
+  border-radius: 0.4rem;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
 .m-action:disabled {
@@ -812,18 +886,18 @@ select {
 
 .m-locate {
   position: absolute;
-  z-index: 1000;
-  right: 0.75rem;
-  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
-  width: 3rem;
-  height: 3rem;
+  z-index: 1100;
+  right: calc(0.4rem + env(safe-area-inset-right, 0px));
+  bottom: calc(1.2rem + env(safe-area-inset-bottom, 0px));
+  width: 2rem;
+  height: 2rem;
   display: grid;
   place-items: center;
   border: 1px solid var(--line);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.97);
+  background: rgba(255, 255, 255, 0.96);
   color: var(--locate);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
   cursor: pointer;
   padding: 0;
 }
@@ -834,96 +908,118 @@ select {
 }
 
 .m-sheet {
-  position: relative;
-  z-index: 1100;
+  position: absolute;
+  z-index: 1200;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
   background: var(--panel);
   border-top: 1px solid var(--line);
-  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.16);
-  transition: height 0.22s ease;
+  border-radius: 0.7rem 0.7rem 0 0;
+  box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.16);
+  transition: height 0.22s ease, transform 0.22s ease;
   overflow: hidden;
 }
 
+.m-sheet.is-dragging {
+  transition: none;
+}
+
+.m-sheet.is-hidden {
+  height: 8rem;
+  transform: translateY(110%);
+  pointer-events: none;
+}
+
 .m-sheet.is-peek {
-  height: 9.5rem;
+  height: calc(3.15rem + env(safe-area-inset-bottom, 0px));
 }
 
 .m-sheet.is-half {
-  height: min(48dvh, 22rem);
+  height: min(42dvh, 18rem);
 }
 
 .m-sheet.is-full {
-  height: min(78dvh, 36rem);
+  height: min(74dvh, 34rem);
 }
 
 .m-sheet-handle {
   display: flex;
   justify-content: center;
   align-items: center;
+  gap: 0.4rem;
   width: 100%;
-  min-height: 1.75rem;
-  padding: 0.45rem 0 0.15rem;
+  min-height: 1.15rem;
+  padding: 0.28rem 0.55rem 0.1rem;
   border: 0;
   background: transparent;
-  cursor: pointer;
+  cursor: grab;
   flex-shrink: 0;
+  touch-action: none;
 }
 
 .m-sheet-handle span {
-  width: 2.5rem;
-  height: 0.28rem;
+  width: 1.7rem;
+  height: 0.16rem;
   border-radius: 999px;
   background: #c4c4c4;
+  flex-shrink: 0;
+}
+
+.m-sheet-handle em {
+  font-style: normal;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .m-sheet-body {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.32rem;
   min-height: 0;
   flex: 1;
-  padding: 0 0.85rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  padding: 0 0.5rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
   overflow: hidden;
 }
 
 .m-sheet-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.m-brand {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 750;
-  line-height: 1.15;
+  gap: 0.4rem;
 }
 
 .m-status {
-  margin: 0.15rem 0 0;
-  font-size: 0.8rem;
+  margin: 0;
+  font-size: 0.68rem;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .m-sheet-collapse {
   border: 1px solid var(--line);
   background: #fff;
-  padding: 0.45rem 0.7rem;
-  min-height: 2.4rem;
+  padding: 0.18rem 0.45rem;
+  min-height: 1.45rem;
   font-weight: 650;
-  font-size: 0.85rem;
+  font-size: 0.68rem;
+  border-radius: 0.3rem;
   cursor: pointer;
   flex-shrink: 0;
 }
 
 .m-filters {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.25rem;
   overflow-x: auto;
-  padding-bottom: 0.15rem;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -935,21 +1031,22 @@ select {
 .m-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.22rem;
   flex-shrink: 0;
   border: 1px solid var(--line);
   background: #fff;
-  padding: 0.5rem 0.7rem;
-  min-height: 2.4rem;
-  font-size: 0.85rem;
-  font-weight: 550;
+  padding: 0.16rem 0.42rem;
+  min-height: 1.4rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  border-radius: 999px;
   color: var(--ink);
   cursor: pointer;
 }
 
 .m-chip i {
-  width: 0.7rem;
-  height: 0.7rem;
+  width: 0.45rem;
+  height: 0.45rem;
   border-radius: 50%;
   display: inline-block;
   border: 1px solid rgba(0, 0, 0, 0.2);
@@ -961,28 +1058,23 @@ select {
   color: var(--accent);
 }
 
-.m-peek-hint {
-  margin: 0;
-  font-size: 0.82rem;
-  color: var(--muted);
-  line-height: 1.35;
-}
-
 .m-list {
   flex: 1;
   min-height: 0;
   overflow: auto;
   border: 1px solid var(--line);
   background: #fff;
+  border-radius: 0.35rem;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .m-row {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.4rem;
   width: 100%;
-  padding: 0.65rem 0.7rem;
+  padding: 0.28rem 0.45rem;
   border: 0;
   border-bottom: 1px solid var(--line);
   background: #fff;
@@ -996,8 +1088,8 @@ select {
 }
 
 .m-row i {
-  width: 0.85rem;
-  height: 0.85rem;
+  width: 0.5rem;
+  height: 0.5rem;
   border-radius: 50%;
   display: inline-block;
   flex-shrink: 0;
@@ -1011,7 +1103,7 @@ select {
 }
 
 .m-row strong {
-  font-size: 0.95rem;
+  font-size: 0.78rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1019,7 +1111,7 @@ select {
 
 .m-row em {
   font-style: normal;
-  font-size: 0.78rem;
+  font-size: 0.65rem;
   color: var(--muted);
 }
 
@@ -1027,8 +1119,8 @@ select {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
+  gap: 0.35rem;
+  font-size: 0.68rem;
   color: var(--muted);
   flex-shrink: 0;
 }
@@ -1041,10 +1133,12 @@ select {
 .m-pager button {
   border: 1px solid var(--line);
   background: #fff;
-  padding: 0.55rem 0.85rem;
-  min-height: 2.5rem;
-  min-width: 4.25rem;
+  padding: 0.22rem 0.5rem;
+  min-height: 1.55rem;
+  min-width: 2.8rem;
   font-weight: 650;
+  font-size: 0.68rem;
+  border-radius: 0.3rem;
   cursor: pointer;
 }
 
@@ -1054,35 +1148,157 @@ select {
 }
 
 .m-detail {
-  padding: 0 0.85rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
+  gap: 0.4rem;
+  padding: 0 0.5rem calc(0.4rem + env(safe-area-inset-bottom, 0px));
+  font-size: 0.75rem;
 }
 
 .m-detail .detail-back {
-  min-height: 2.5rem;
-  padding: 0.5rem 0.85rem;
+  min-height: 0;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.7rem;
   font-weight: 650;
+  border-radius: 0.3rem;
 }
 
 .m-detail .detail-title {
-  font-size: 1.15rem;
+  font-size: 0.92rem;
+}
+
+.m-detail .detail-section-title {
+  font-size: 0.65rem;
+}
+
+.m-detail .detail-field dt,
+.m-detail .detail-field dd,
+.m-detail .detail-note,
+.m-detail .detail-dba,
+.m-detail .detail-contact-status {
+  font-size: 0.7rem;
 }
 
 .m-detail .detail-copy {
-  min-height: 2rem;
-  padding: 0.35rem 0.55rem;
-  font-size: 0.8rem;
+  min-height: 0;
+  padding: 0.15rem 0.35rem;
+  font-size: 0.65rem;
 }
 
-.m-app .m-locate {
-  /* Sit above the sheet peek height */
-  bottom: calc(10.25rem + env(safe-area-inset-bottom, 0px));
+.m-widget {
+  position: absolute;
+  z-index: 1300;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  height: 1.55rem;
+  max-width: 9rem;
+  padding: 0 0.55rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  touch-action: none;
 }
 
-.m-app:has(.m-sheet.is-half) .m-locate {
-  bottom: calc(min(48dvh, 22rem) + 0.65rem);
+.m-widget-search {
+  top: calc(0.15rem + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
 }
 
-.m-app:has(.m-sheet.is-full) .m-locate {
+.m-widget-list {
+  bottom: calc(1.15rem + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.m-app .leaflet-control-attribution {
+  font-size: 9px;
+  line-height: 1.2;
+  max-width: 70%;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.m-widget-grip {
+  width: 0.85rem;
+  height: 0.14rem;
+  border-radius: 999px;
+  background: #b5b5b5;
+  flex-shrink: 0;
+}
+
+.m-app[data-sheet="peek"] .m-locate {
+  bottom: calc(3.35rem + env(safe-area-inset-bottom, 0px));
+}
+
+.m-app[data-sheet="half"] .m-locate {
+  bottom: calc(min(42dvh, 18rem) + 0.35rem);
+}
+
+.m-app[data-sheet="full"] .m-locate {
   display: none;
+}
+
+.m-app .rank-load-spinner {
+  width: 1.7rem;
+  height: 1.7rem;
+}
+
+.m-app .rank-load-copy {
+  font-size: 0.75rem;
+}
+
+.m-app .dense-note,
+.m-app .error,
+.m-app .meta {
+  font-size: 0.68rem;
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .m-top-stack {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .m-search {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .m-actions {
+    flex: 0 1 auto;
+  }
+
+  .m-action {
+    white-space: nowrap;
+  }
+
+  .m-sheet.is-peek {
+    height: calc(3.05rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .m-sheet.is-half {
+    height: min(58dvh, 14rem);
+  }
+
+  .m-sheet.is-full {
+    height: min(86dvh, 100%);
+  }
+
+  .m-app[data-sheet="peek"] .m-locate {
+    bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .m-app[data-sheet="half"] .m-locate {
+    bottom: calc(min(58dvh, 14rem) + 0.3rem);
+  }
 }
 

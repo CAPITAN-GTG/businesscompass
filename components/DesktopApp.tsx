@@ -12,7 +12,7 @@ import { BusinessDetailPanel, formatDate } from "@/components/BusinessDetailPane
 import {
   LIST_PAGE_SIZE,
   ROW_H,
-  useBusinessCompass,
+  type BusinessCompassState,
 } from "@/hooks/useBusinessCompass";
 
 const BusinessMap = dynamic(() => import("@/components/BusinessMap"), {
@@ -20,8 +20,7 @@ const BusinessMap = dynamic(() => import("@/components/BusinessMap"), {
   loading: () => <div className="map-loading">Loading map…</div>,
 });
 
-export default function DesktopApp() {
-  const c = useBusinessCompass();
+export default function DesktopApp({ c }: { c: BusinessCompassState }) {
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,6 +39,7 @@ export default function DesktopApp() {
             ageColor={c.ageColor}
             detailLoading={c.detailLoading}
             detailError={c.detailError}
+            enrichment={c.enrichment}
             showAdvanced={c.showAdvanced}
             setShowAdvanced={c.setShowAdvanced}
             onClose={c.closeDetail}

@@ -9,7 +9,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import type { Business } from "@/lib/types/business";
+import type { Business, BusinessEnrichment } from "@/lib/types/business";
 import {
   AGE_COLOR_FILTERS,
   DEFAULT_AGE_COLOR_BAND,
@@ -24,6 +24,7 @@ import {
   type MapBBox,
   type UserLocation,
 } from "@/lib/geo";
+import { refineMapCoordinates } from "@/lib/coordinates/refine";
 import { businessesToPins } from "@/lib/pins";
 import {
   businessesInBBoxFromCache,
@@ -34,6 +35,7 @@ import {
   markAreaTooDense,
   areaTooDenseCount,
   mergeBusinessesIntoCache,
+  releaseRankCacheIfFull,
   viewFilterKey,
 } from "@/lib/viewCache";
 import { geocodeCaliforniaPlace } from "@/lib/geocode";
@@ -63,6 +65,7 @@ export function useBusinessCompass() {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Business | null>(null);
+  const [enrichment, setEnrichment] = useState<BusinessEnrichment | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
@@ -81,7 +84,7 @@ export function useBusinessCompass() {
   const [fetchedTotal, setFetchedTotal] = useState(0);
   const [placeQuery, setPlaceQuery] = useState("");
   const [placeStatus, setPlaceStatus] = useState<
-    "idle" | "searching" | "ok" | "approx" | "missing" | "outside"
+    "idle" | "searching" | "ok" | "missing" | "outside"
   >("idle");
   const [placeMessage, setPlaceMessage] = useState<string | null>(null);
   const [placeFocus, setPlaceFocus] = useState<{
@@ -91,6 +94,8 @@ export function useBusinessCompass() {
   } | null>(null);
   const [placeFocusToken, setPlaceFocusToken] = useState(0);
   const fetchGenRef = useRef(0);
+  const refineAbortRef = useRef<AbortController | null>(null);
+  const colorFilterRef = useRef<ColorFilter>(colorFilter);
   const lockedBBoxRef = useRef<MapBBox | null>(null);
   const modeRef = useRef<MapMode>(mode);
   lockedBBoxRef.current = lockedBBox;
@@ -109,6 +114,9 @@ export function useBusinessCompass() {
       : selectedId
         ? (byId.get(selectedId) ?? null)
         : null;
+
+  const activeEnrichment =
+    detail && detail.id === selectedId ? enrichment : null;
 
   const activeFilterMeta =
     colorFilter === "all"
@@ -149,6 +157,42 @@ export function useBusinessCompass() {
     setBusinesses(businessesInBBoxFromCache(key, bbox));
   });
 
+  const stopCoordinateRefine = useCallback(() => {
+    refineAbortRef.current?.abort();
+    refineAbortRef.current = null;
+  }, []);
+
+  const beginCoordinateRefine = useCallback((bbox: MapBBox) => {
+    refineAbortRef.current?.abort();
+    const controller = new AbortController();
+    refineAbortRef.current = controller;
+    void refineMapCoordinates({
+      bbox,
+      signal: controller.signal,
+      onApplied: () => {
+        const box = lockedBBoxRef.current;
+        if (!box || modeRef.current !== "locked" || controller.signal.aborted) {
+          return;
+        }
+        const filter = colorFilterRef.current;
+        if (filter === "all") {
+          setDenseMatchCount(null);
+          setBusinesses(businessesInBBoxFromAllRanks(box));
+          return;
+        }
+        const key = viewFilterKey(filter);
+        const dense = areaTooDenseCount(key, box);
+        if (dense != null) {
+          setBusinesses([]);
+          setDenseMatchCount(dense);
+          return;
+        }
+        setDenseMatchCount(null);
+        setBusinesses(businessesInBBoxFromCache(key, box));
+      },
+    });
+  }, []);
+
   const fetchRankIntoCache = useCallback(
     async (
       gen: number,
@@ -161,6 +205,7 @@ export function useBusinessCompass() {
       if (isAreaLoaded(filterKey, bbox)) {
         return 0;
       }
+      releaseRankCacheIfFull(filterKey, bbox);
 
       const range = dateRangeForColorFilter(filter);
       const base: Record<string, string> = {
@@ -254,6 +299,7 @@ export function useBusinessCompass() {
 
   const fetchAllRanksForArea = useCallback(
     async (active: ColorFilter, bbox: MapBBox) => {
+      stopCoordinateRefine();
       const gen = ++fetchGenRef.current;
       const total = AGE_COLOR_FILTERS.length;
       setError(null);
@@ -293,6 +339,7 @@ export function useBusinessCompass() {
         paintLocked(paint, bbox);
         setLoading(false);
         setError(null);
+        beginCoordinateRefine(bbox);
       } catch (err) {
         if (gen !== fetchGenRef.current) return;
         setRankLoad(null);
@@ -303,7 +350,7 @@ export function useBusinessCompass() {
         );
       }
     },
-    [fetchRankIntoCache],
+    [fetchRankIntoCache, stopCoordinateRefine, beginCoordinateRefine],
   );
 
   const ensureRankVisible = useCallback(
@@ -329,6 +376,7 @@ export function useBusinessCompass() {
         setRankLoad(null);
         paintLocked(filter, bbox);
         setLoading(false);
+        beginCoordinateRefine(bbox);
       } catch (err) {
         if (gen !== fetchGenRef.current) return;
         setRankLoad(null);
@@ -339,7 +387,7 @@ export function useBusinessCompass() {
         );
       }
     },
-    [fetchRankIntoCache],
+    [fetchRankIntoCache, beginCoordinateRefine],
   );
 
   const onViewChange = useCallback(
@@ -380,6 +428,7 @@ export function useBusinessCompass() {
   }
 
   function keepLooking() {
+    stopCoordinateRefine();
     fetchGenRef.current += 1;
     clearSessionCache();
     setMode("explore");
@@ -406,6 +455,7 @@ export function useBusinessCompass() {
 
     try {
       if (mode === "locked") {
+        stopCoordinateRefine();
         fetchGenRef.current += 1;
         clearSessionCache();
         setMode("explore");
@@ -454,6 +504,10 @@ export function useBusinessCompass() {
   }
 
   useEffect(() => {
+    colorFilterRef.current = colorFilter;
+  }, [colorFilter]);
+
+  useEffect(() => {
     if (modeRef.current !== "locked") return;
     const bbox = lockedBBoxRef.current;
     if (!bbox) return;
@@ -483,38 +537,47 @@ export function useBusinessCompass() {
   useEffect(() => {
     if (!selectedId) {
       setDetail(null);
+      setEnrichment(null);
       setDetailError(null);
       setDetailLoading(false);
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
     setDetailLoading(true);
     setDetailError(null);
+    setEnrichment(null);
 
     void (async () => {
       try {
         const res = await fetch(
           `/api/businesses/${encodeURIComponent(selectedId)}`,
+          { signal: controller.signal },
         );
-        const data = await res.json();
-        if (cancelled) return;
-        if (!res.ok) {
+        const data = (await res.json()) as {
+          error?: string;
+          business?: Business;
+          enrichment?: BusinessEnrichment;
+        };
+        if (controller.signal.aborted) return;
+        if (!res.ok || !data.business) {
           setDetailError(data.error || "Could not load business details.");
           setDetailLoading(false);
           return;
         }
-        setDetail(data.business as Business);
+        setDetail(data.business);
+        setEnrichment(data.enrichment ?? null);
         setDetailLoading(false);
-      } catch {
-        if (cancelled) return;
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
         setDetailError("Could not load business details.");
         setDetailLoading(false);
       }
     })();
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [selectedId]);
 
@@ -584,6 +647,7 @@ export function useBusinessCompass() {
   function closeDetail() {
     setSelectedId(null);
     setDetail(null);
+    setEnrichment(null);
     setDetailError(null);
     setShowAdvanced(false);
   }
@@ -644,6 +708,7 @@ export function useBusinessCompass() {
     setSelectedId,
     detailLoading,
     detailError,
+    enrichment: activeEnrichment,
     userLocation,
     geoStatus,
     focusUserToken,

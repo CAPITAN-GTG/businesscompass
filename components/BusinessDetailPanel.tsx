@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Business } from "@/lib/types/business";
+import type { Business, BusinessEnrichment } from "@/lib/types/business";
 
 export function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -82,11 +82,66 @@ export function DetailAddressField({
   );
 }
 
+function ContactBlock({
+  enrichment,
+  failed,
+}: {
+  enrichment: BusinessEnrichment | null;
+  failed: boolean;
+}) {
+  if (!enrichment) {
+    if (failed) return null;
+    return <p className="detail-contact-status">Looking up public phone…</p>;
+  }
+
+  if (enrichment.status === "unavailable") {
+    return (
+      <p className="detail-contact-status">Phone lookup is temporarily unavailable.</p>
+    );
+  }
+
+  if (enrichment.status === "matched" && (enrichment.phone || enrichment.website)) {
+    return (
+      <div className="detail-contact">
+        {enrichment.phone ? (
+          <a className="detail-link" href={`tel:${enrichment.phone}`}>
+            {enrichment.phoneDisplay ?? enrichment.phone}
+          </a>
+        ) : (
+          <p className="detail-contact-status">No public phone number found.</p>
+        )}
+        {enrichment.website ? (
+          <a
+            className="detail-link"
+            href={enrichment.website}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {displayHost(enrichment.website)}
+          </a>
+        ) : null}
+        <p className="detail-source-note">Public listing from OpenStreetMap</p>
+      </div>
+    );
+  }
+
+  return <p className="detail-contact-status">No public phone number found.</p>;
+}
+
+function displayHost(website: string): string {
+  try {
+    return new URL(website).host.replace(/^www\./, "");
+  } catch {
+    return website;
+  }
+}
+
 export function BusinessDetailPanel({
   selected,
   ageColor,
   detailLoading,
   detailError,
+  enrichment,
   showAdvanced,
   setShowAdvanced,
   onClose,
@@ -96,6 +151,7 @@ export function BusinessDetailPanel({
   ageColor: string | null;
   detailLoading: boolean;
   detailError: string | null;
+  enrichment: BusinessEnrichment | null;
   showAdvanced: boolean;
   setShowAdvanced: (value: boolean | ((v: boolean) => boolean)) => void;
   onClose: () => void;
@@ -140,6 +196,15 @@ export function BusinessDetailPanel({
           <DetailField label="DBA" value={selected.dbaName} />
         </dl>
       </section>
+
+      {!detailError || enrichment ? (
+        <section className="detail-section">
+          <h2 className="detail-section-title">Contact</h2>
+          <div className="detail-section-body">
+            <ContactBlock enrichment={enrichment} failed={Boolean(detailError)} />
+          </div>
+        </section>
+      ) : null}
 
       <section className="detail-section">
         <h2 className="detail-section-title">Dates</h2>

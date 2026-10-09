@@ -13,6 +13,7 @@ import type {
   BusinessQuery,
   BusinessSort,
 } from "@/lib/types/business";
+import { isLocationAccount } from "@/lib/locationAccount";
 import type { BusinessSource } from "@/lib/sources/types";
 
 /**
@@ -73,6 +74,8 @@ interface CacheEntry {
 }
 
 const queryCache = new Map<string, CacheEntry>();
+const queryInflight = new Map<string, Promise<unknown>>();
+const QUERY_CACHE_MAX = 200;
 
 function nullIfEmpty(value: unknown): string | null {
   if (value === null || value === undefined) return null;
@@ -115,14 +118,22 @@ function geoBoxClause(query: BusinessQuery): string | null {
 function buildWhere(query: BusinessQuery): string | null {
   const clauses: string[] = [];
 
-  // Map finder only needs geocoded points inside the active box.
-  clauses.push("location_1 IS NOT NULL");
-  const geo = geoBoxClause(query);
-  if (!geo) {
-    // Empty intersection with CA — force zero rows.
-    clauses.push("1 = 0");
+  if (query.unlocated) {
+    // Registrations stored at 0,0 never fall inside within_box. Fetch a
+    // capped newest slice separately; the map still drops any that CAMS
+    // cannot place inside the locked area.
+    clauses.push("location_1.latitude = '0'");
+    clauses.push("street_address IS NOT NULL");
   } else {
-    clauses.push(geo);
+    // Map finder only needs geocoded points inside the active box.
+    clauses.push("location_1 IS NOT NULL");
+    const geo = geoBoxClause(query);
+    if (!geo) {
+      // Empty intersection with CA — force zero rows.
+      clauses.push("1 = 0");
+    } else {
+      clauses.push(geo);
+    }
   }
 
   if (
@@ -217,12 +228,39 @@ function normalize(raw: LaRawRecord): Business {
   };
 }
 
+function rememberQuery(url: string, payload: unknown): void {
+  const now = Date.now();
+  if (queryCache.size >= QUERY_CACHE_MAX) {
+    for (const [key, entry] of queryCache) {
+      if (entry.expiresAt <= now) queryCache.delete(key);
+    }
+  }
+  queryCache.set(url, { expiresAt: now + CACHE_TTL_MS, payload });
+  while (queryCache.size > QUERY_CACHE_MAX) {
+    const oldest = queryCache.keys().next().value;
+    if (oldest === undefined) break;
+    queryCache.delete(oldest);
+  }
+}
+
 async function sodFetch<T>(url: string): Promise<T> {
   const cached = queryCache.get(url);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.payload as T;
   }
+  if (cached) queryCache.delete(url);
 
+  const pending = queryInflight.get(url);
+  if (pending) return pending as Promise<T>;
+
+  const job = fetchSocrata<T>(url).finally(() => {
+    queryInflight.delete(url);
+  });
+  queryInflight.set(url, job);
+  return job;
+}
+
+async function fetchSocrata<T>(url: string): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
@@ -238,7 +276,7 @@ async function sodFetch<T>(url: string): Promise<T> {
     }
 
     const data = (await res.json()) as T;
-    queryCache.set(url, { expiresAt: Date.now() + CACHE_TTL_MS, payload: data });
+    rememberQuery(url, data);
     return data;
   } finally {
     clearTimeout(timer);
@@ -338,6 +376,7 @@ export const losAngelesBusinessSource: BusinessSource = {
         : null;
 
     if (
+      !query.unlocated &&
       query.bbox &&
       page === 1 &&
       totalCount != null &&
@@ -364,7 +403,7 @@ export const losAngelesBusinessSource: BusinessSource = {
 
   async getById(id: string): Promise<Business | null> {
     const safeId = id.trim();
-    if (!safeId) return null;
+    if (!isLocationAccount(safeId)) return null;
 
     const params = new URLSearchParams();
     params.set("$limit", "1");

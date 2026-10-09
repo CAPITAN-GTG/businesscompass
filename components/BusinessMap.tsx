@@ -19,6 +19,49 @@ export type { UserLocation, MapPin, MapBBox };
 const DEFAULT_ZOOM = MAP_DEFAULT_ZOOM;
 const LOCATE_ZOOM = 17;
 const BOUNDS_DEBOUNCE_MS = 500;
+const CAMERA_KEY = "bc.mapCamera";
+
+function readSavedCamera(): { lat: number; lng: number; zoom: number } | null {
+  try {
+    const raw = sessionStorage.getItem(CAMERA_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as { lat?: number; lng?: number; zoom?: number };
+    if (
+      typeof v.lat !== "number" ||
+      typeof v.lng !== "number" ||
+      typeof v.zoom !== "number" ||
+      !Number.isFinite(v.lat) ||
+      !Number.isFinite(v.lng) ||
+      !Number.isFinite(v.zoom)
+    ) {
+      return null;
+    }
+    if (!isInCalifornia(v.lat, v.lng)) return null;
+    return {
+      lat: v.lat,
+      lng: v.lng,
+      zoom: Math.min(19, Math.max(MAP_MIN_ZOOM_EXPLORE, v.zoom)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeSavedCamera(map: L.Map) {
+  try {
+    const center = map.getCenter();
+    sessionStorage.setItem(
+      CAMERA_KEY,
+      JSON.stringify({
+        lat: center.lat,
+        lng: center.lng,
+        zoom: map.getZoom(),
+      }),
+    );
+  } catch {
+    // Private mode or a full storage quota — the live map still works.
+  }
+}
 
 type PinsLayer = {
   setData: (pins: MapPin[], selectedId: string | null) => void;
@@ -314,9 +357,10 @@ export default function BusinessMap({
       CA_BOUNDS_LEAFLET[0],
       CA_BOUNDS_LEAFLET[1],
     );
+    const saved = readSavedCamera();
     const map = L.map(el, {
-      center: LA_CENTER,
-      zoom: DEFAULT_ZOOM,
+      center: saved ? [saved.lat, saved.lng] : LA_CENTER,
+      zoom: saved?.zoom ?? DEFAULT_ZOOM,
       minZoom: MAP_MIN_ZOOM_EXPLORE,
       maxBounds: caBounds,
       maxBoundsViscosity: 1,
@@ -387,6 +431,7 @@ export default function BusinessMap({
       const bbox = readMapBBox(map);
       if (!bbox) return;
       try {
+        writeSavedCamera(map);
         onViewChangeRef.current?.({ bbox, zoom: map.getZoom() });
       } catch {
         // ignore
@@ -424,19 +469,49 @@ export default function BusinessMap({
     // Layout may not be ready on the first frame (absolute / mobile split).
     const raf1 = requestAnimationFrame(() => {
       if (cancelled || mapRef.current !== map) return;
-      map.invalidateSize();
+      map.invalidateSize({ pan: false });
       sync();
       raf2 = requestAnimationFrame(() => {
         if (cancelled || mapRef.current !== map) return;
-        map.invalidateSize();
+        map.invalidateSize({ pan: false });
         sync();
       });
     });
+
+    // Resize the existing map when the phone rotates. Do not rebuild it.
+    let resizeRaf = 0;
+    const onContainerResize = () => {
+      cancelAnimationFrame(resizeRaf);
+      resizeRaf = requestAnimationFrame(() => {
+        if (cancelled || mapRef.current !== map || !isMapUsable(map)) return;
+        map.invalidateSize({ pan: false });
+      });
+    };
+    const resizeObserver = new ResizeObserver(onContainerResize);
+    resizeObserver.observe(el);
+
+    const orientTimers: number[] = [];
+    const onOrientation = () => {
+      orientTimers.push(window.setTimeout(onContainerResize, 80));
+      orientTimers.push(window.setTimeout(onContainerResize, 320));
+    };
+    window.addEventListener("orientationchange", onOrientation);
+
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      onContainerResize();
+    };
+    window.addEventListener("pageshow", onPageShow);
 
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf1);
       cancelAnimationFrame(raf2);
+      cancelAnimationFrame(resizeRaf);
+      resizeObserver.disconnect();
+      window.removeEventListener("orientationchange", onOrientation);
+      for (const id of orientTimers) window.clearTimeout(id);
+      window.removeEventListener("pageshow", onPageShow);
       window.clearTimeout(boundsTimer);
       map.off("moveend", scheduleBounds);
       map.off("zoomend", scheduleBounds);
